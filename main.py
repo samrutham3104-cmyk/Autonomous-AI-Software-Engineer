@@ -3,8 +3,6 @@
 # MAIN AUTONOMOUS PIPELINE
 # ============================================================
 
-import os
-
 from planner_agent import create_plan
 from architect_agent import create_architecture
 from coder_agent import create_project_structure
@@ -13,6 +11,8 @@ from review_agent import review_project
 from repair_agent import repair_project
 from security_agent import scan_project
 from verification_agent import verify_project
+
+from pipeline_state import PipelineState
 
 
 # ============================================================
@@ -50,6 +50,17 @@ def display_header():
 def run_pipeline(requirement):
 
     # --------------------------------------------------------
+    # CREATE PIPELINE STATE
+    # --------------------------------------------------------
+
+    state = PipelineState(
+        requirement
+    )
+
+    state.final_status = "Running"
+    state.save()
+
+    # --------------------------------------------------------
     # 1. PLANNER
     # --------------------------------------------------------
 
@@ -57,11 +68,49 @@ def run_pipeline(requirement):
     print("1️⃣ PLANNER AGENT")
     print("=" * 70)
 
-    plan = create_plan(
-        requirement
+    state.update_agent(
+        "Planner",
+        "Running"
     )
 
-    print("✅ Development plan created.")
+    try:
+
+        plan = create_plan(
+            requirement
+        )
+
+        state.plan = plan
+
+        state.update_agent(
+            "Planner",
+            "Completed",
+            plan
+        )
+
+        print(
+            "✅ Development plan created."
+        )
+
+    except Exception as error:
+
+        state.update_agent(
+            "Planner",
+            "Failed",
+            str(error)
+        )
+
+        state.set_final_status(
+            "Failed"
+        )
+
+        print(
+            f"❌ Planner failed: {error}"
+        )
+
+        return {
+            "final_status": False,
+            "error": str(error)
+        }
 
     # --------------------------------------------------------
     # 2. ARCHITECT
@@ -71,11 +120,49 @@ def run_pipeline(requirement):
     print("2️⃣ ARCHITECT AGENT")
     print("=" * 70)
 
-    architecture = create_architecture(
-        plan
+    state.update_agent(
+        "Architect",
+        "Running"
     )
 
-    print("✅ System architecture created.")
+    try:
+
+        architecture = create_architecture(
+            plan
+        )
+
+        state.architecture = architecture
+
+        state.update_agent(
+            "Architect",
+            "Completed",
+            architecture
+        )
+
+        print(
+            "✅ System architecture created."
+        )
+
+    except Exception as error:
+
+        state.update_agent(
+            "Architect",
+            "Failed",
+            str(error)
+        )
+
+        state.set_final_status(
+            "Failed"
+        )
+
+        print(
+            f"❌ Architect failed: {error}"
+        )
+
+        return {
+            "final_status": False,
+            "error": str(error)
+        }
 
     # --------------------------------------------------------
     # 3. CODER
@@ -84,6 +171,11 @@ def run_pipeline(requirement):
     print("\n" + "=" * 70)
     print("3️⃣ CODING AGENT")
     print("=" * 70)
+
+    state.update_agent(
+        "Coder",
+        "Running"
+    )
 
     project_name = (
         requirement
@@ -94,14 +186,46 @@ def run_pipeline(requirement):
         .replace("?", "")
     )
 
-    project_path = create_project_structure(
-        project_name,
-        architecture
-    )
+    try:
 
-    print(
-        f"✅ Project created at: {project_path}"
-    )
+        project_path = create_project_structure(
+            project_name,
+            architecture
+        )
+
+        state.project_name = project_name
+        state.project_path = project_path
+
+        state.update_agent(
+            "Coder",
+            "Completed",
+            project_path
+        )
+
+        print(
+            f"✅ Project created at: {project_path}"
+        )
+
+    except Exception as error:
+
+        state.update_agent(
+            "Coder",
+            "Failed",
+            str(error)
+        )
+
+        state.set_final_status(
+            "Failed"
+        )
+
+        print(
+            f"❌ Coder failed: {error}"
+        )
+
+        return {
+            "final_status": False,
+            "error": str(error)
+        }
 
     # --------------------------------------------------------
     # 4. TESTING
@@ -111,17 +235,54 @@ def run_pipeline(requirement):
     print("4️⃣ TESTING AGENT")
     print("=" * 70)
 
-    test_result = run_tests(
-        project_path
+    state.update_agent(
+        "Tester",
+        "Running"
     )
 
-    if test_result["success"]:
+    try:
 
-        print("✅ All tests passed.")
+        test_result = run_tests(
+            project_path
+        )
 
-    else:
+        state.test_result = test_result
 
-        print("❌ Tests failed.")
+        if test_result["success"]:
+
+            state.update_agent(
+                "Tester",
+                "Passed",
+                test_result
+            )
+
+            print(
+                "✅ All tests passed."
+            )
+
+        else:
+
+            state.update_agent(
+                "Tester",
+                "Failed",
+                test_result
+            )
+
+            print(
+                "❌ Tests failed."
+            )
+
+    except Exception as error:
+
+        state.update_agent(
+            "Tester",
+            "Failed",
+            str(error)
+        )
+
+        print(
+            f"❌ Testing failed: {error}"
+        )
 
     # --------------------------------------------------------
     # 5. REVIEW
@@ -131,24 +292,59 @@ def run_pipeline(requirement):
     print("5️⃣ REVIEW AGENT")
     print("=" * 70)
 
-    review_report = review_project(
-        project_path
+    state.update_agent(
+        "Reviewer",
+        "Running"
     )
 
-    total_review_issues = sum(
-        len(issues)
-        for issues in review_report.values()
-    )
+    try:
 
-    if total_review_issues == 0:
+        review_report = review_project(
+            project_path
+        )
 
-        print("✅ Code review passed.")
+        state.review_report = review_report
 
-    else:
+        total_review_issues = sum(
+            len(issues)
+            for issues in review_report.values()
+        )
+
+        if total_review_issues == 0:
+
+            state.update_agent(
+                "Reviewer",
+                "Passed",
+                review_report
+            )
+
+            print(
+                "✅ Code review passed."
+            )
+
+        else:
+
+            state.update_agent(
+                "Reviewer",
+                "Completed",
+                review_report
+            )
+
+            print(
+                f"⚠️ {total_review_issues} "
+                f"review issue(s) detected."
+            )
+
+    except Exception as error:
+
+        state.update_agent(
+            "Reviewer",
+            "Failed",
+            str(error)
+        )
 
         print(
-            f"⚠️ {total_review_issues} "
-            f"review issue(s) detected."
+            f"❌ Review failed: {error}"
         )
 
     # --------------------------------------------------------
@@ -159,14 +355,41 @@ def run_pipeline(requirement):
     print("6️⃣ REPAIR AGENT")
     print("=" * 70)
 
-    repair_result = repair_project(
-        project_path,
-        review_report
+    state.update_agent(
+        "Repairer",
+        "Running"
     )
 
-    print(
-        f"✅ Repair stage completed."
-    )
+    try:
+
+        repair_result = repair_project(
+            project_path,
+            review_report
+        )
+
+        state.repair_result = repair_result
+
+        state.update_agent(
+            "Repairer",
+            "Completed",
+            repair_result
+        )
+
+        print(
+            "✅ Repair stage completed."
+        )
+
+    except Exception as error:
+
+        state.update_agent(
+            "Repairer",
+            "Failed",
+            str(error)
+        )
+
+        print(
+            f"❌ Repair failed: {error}"
+        )
 
     # --------------------------------------------------------
     # 7. SECURITY
@@ -176,26 +399,59 @@ def run_pipeline(requirement):
     print("7️⃣ SECURITY AGENT")
     print("=" * 70)
 
-    security_report = scan_project(
-        project_path
+    state.update_agent(
+        "Security",
+        "Running"
     )
 
-    total_security_issues = sum(
-        len(issues)
-        for issues in security_report.values()
-    )
+    try:
 
-    if total_security_issues == 0:
-
-        print(
-            "✅ No obvious security issues detected."
+        security_report = scan_project(
+            project_path
         )
 
-    else:
+        state.security_report = security_report
+
+        total_security_issues = sum(
+            len(issues)
+            for issues in security_report.values()
+        )
+
+        if total_security_issues == 0:
+
+            state.update_agent(
+                "Security",
+                "Passed",
+                security_report
+            )
+
+            print(
+                "✅ No obvious security issues detected."
+            )
+
+        else:
+
+            state.update_agent(
+                "Security",
+                "Completed",
+                security_report
+            )
+
+            print(
+                f"🚨 {total_security_issues} "
+                f"security issue(s) detected."
+            )
+
+    except Exception as error:
+
+        state.update_agent(
+            "Security",
+            "Failed",
+            str(error)
+        )
 
         print(
-            f"🚨 {total_security_issues} "
-            f"security issue(s) detected."
+            f"❌ Security scan failed: {error}"
         )
 
     # --------------------------------------------------------
@@ -206,12 +462,68 @@ def run_pipeline(requirement):
     print("8️⃣ VERIFICATION AGENT")
     print("=" * 70)
 
-    verification_result = verify_project(
-        project_path,
-        test_result,
-        review_report,
-        security_report
+    state.update_agent(
+        "Verification",
+        "Running"
     )
+
+    try:
+
+        verification_result = verify_project(
+            project_path,
+            test_result,
+            review_report,
+            security_report
+        )
+
+        state.verification_result = (
+            verification_result
+        )
+
+        if verification_result["final_status"]:
+
+            state.update_agent(
+                "Verification",
+                "Passed",
+                verification_result
+            )
+
+            state.set_final_status(
+                "Verified"
+            )
+
+        else:
+
+            state.update_agent(
+                "Verification",
+                "Failed",
+                verification_result
+            )
+
+            state.set_final_status(
+                "Failed"
+            )
+
+    except Exception as error:
+
+        state.update_agent(
+            "Verification",
+            "Failed",
+            str(error)
+        )
+
+        state.set_final_status(
+            "Failed"
+        )
+
+        verification_result = {
+            "final_status": False,
+            "error": str(error)
+        }
+
+        print(
+            f"❌ Verification failed: {error}"
+        )
 
     # --------------------------------------------------------
     # FINAL RESULT
@@ -221,7 +533,7 @@ def run_pipeline(requirement):
     print("📦 FINAL RESULT")
     print("=" * 70)
 
-    if verification_result["final_status"]:
+    if state.final_status == "Verified":
 
         print(
             "\n🎉 PROJECT VERIFIED SUCCESSFULLY!"
